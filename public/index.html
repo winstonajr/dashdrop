@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DashDrop • Enterprise LAN File Exchange</title>
+    
+    <!-- Tipografia: Inter + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              accent: {
+                50: '#eef2ff',
+                400: '#818cf8',
+                500: '#6366f1',
+                600: '#4f46e5',
+                hover: '#4338ca',
+              },
+              surface: {
+                base: '#090d16',
+                card: 'rgba(15, 23, 42, 0.65)',
+                border: 'rgba(255, 255, 255, 0.08)',
+                subtle: 'rgba(255, 255, 255, 0.03)',
+              }
+            },
+            boxShadow: {
+              'glow': '0 0 50px -10px rgba(99, 102, 241, 0.15)',
+              'glow-active': '0 0 40px rgba(99, 102, 241, 0.35)',
+            }
+          }
+        }
+      }
+    </script>
+    
+    <!-- Vue 3 & Font Awesome Pro/Free CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" />
+    
+    <style>
+      [v-cloak] { display: none; }
+      body {
+        background-color: #090d16;
+        background-image: 
+          radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(56, 189, 248, 0.05) 0px, transparent 50%);
+        background-attachment: fixed;
+      }
+      /* Scrollbar fluida e minimalista */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+    </style>
+  </head>
+  
+  <body class="text-slate-200 font-sans antialiased min-h-screen flex flex-col justify-between selection:bg-accent-500 selection:text-white p-4 sm:p-8">
+    <div id="app" v-cloak class="max-w-4xl mx-auto w-full space-y-6">
+      
+      <!-- Topbar Header -->
+      <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 rounded-2xl bg-surface-card border border-surface-border backdrop-blur-xl shadow-glow">
+        <div class="flex items-center gap-3.5">
+          <div class="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-lg shadow-accent-500/25 border border-white/20">
+            <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+            <span class="absolute -top-1 -right-1 flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-surface-base"></span>
+            </span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg font-bold tracking-tight text-white font-mono">DashDrop</h1>
+              <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-accent-500/10 text-accent-400 border border-accent-500/20 rounded-md">LAN Node</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Transferência p2p de alta velocidade no escritório</p>
+          </div>
+        </div>
+
+        <!-- Estatísticas da Rede -->
+        <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          <div class="text-right hidden sm:block">
+            <p class="text-[11px] text-slate-400 font-medium">Armazenamento Local</p>
+            <p class="text-xs font-mono font-semibold text-slate-200">{{ formatSize(totalStorage) }} em uso</p>
+          </div>
+          
+          <button 
+            @click="fetchFiles" 
+            :disabled="loading"
+            class="h-9 px-3.5 rounded-xl bg-surface-subtle hover:bg-white/5 border border-surface-border text-xs font-medium text-slate-300 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+            title="Atualizar lista (R)"
+          >
+            <i class="fa-solid fa-arrows-rotate text-[11px]" :class="{'animate-spin': loading}"></i>
+            <span>Sincronizar</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Dropzone / Drag-and-Drop Area -->
+      <section 
+        class="relative group rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden cursor-pointer backdrop-blur-md"
+        :class="dragover 
+          ? 'border-accent-500 bg-accent-500/10 shadow-glow-active scale-[1.008]' 
+          : 'border-surface-border hover:border-white/20 bg-surface-card/60 hover:bg-surface-card'"
+        @dragover.prevent="dragover = true"
+        @dragleave.prevent="dragover = false"
+        @drop.prevent="handleDrop"
+        @click="!uploading && $refs.fileInput.click()"
+      >
+        <input type="file" ref="fileInput" @change="handleFileSelect" class="hidden" multiple />
+
+        <div class="p-8 sm:p-12 text-center flex flex-col items-center justify-center">
+          <!-- Ícone animado no hover -->
+          <div class="w-14 h-14 rounded-2xl bg-surface-subtle border border-surface-border flex items-center justify-center text-slate-400 group-hover:text-accent-400 group-hover:scale-110 group-hover:border-accent-500/30 transition-all duration-300 mb-4 shadow-inner">
+            <i class="fa-solid fa-arrow-up-from-bracket text-xl"></i>
+          </div>
+
+          <h2 class="text-base font-semibold text-white tracking-tight mb-1">
+            Arraste e solte qualquer arquivo aqui
+          </h2>
+          <p class="text-xs text-slate-400 max-w-sm mb-4">
+            Ou navegue no explorador de arquivos local. Sem limites de tamanho graças ao buffer de stream em disco.
+          </p>
+
+          <div class="flex items-center gap-4 text-[11px] text-slate-500 font-mono">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-500"></i> Chunk streaming</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-500"></i> Sem compressão</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-500"></i> Privado na LAN</span>
+          </div>
+        </div>
+
+        <!-- Barra de Progresso Sobreposta Durante o Envio -->
+        <div v-if="uploading" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md p-6 flex flex-col justify-center items-center z-20">
+          <div class="w-full max-w-md space-y-3">
+            <div class="flex justify-between items-center text-xs">
+              <span class="font-medium text-slate-200 truncate max-w-[280px]">{{ currentFile }}</span>
+              <span class="font-mono text-accent-400 font-semibold">{{ progress }}%</span>
+            </div>
+            
+            <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden border border-white/5">
+              <div 
+                class="h-full bg-gradient-to-r from-accent-500 to-sky-400 rounded-full transition-all duration-150 ease-out"
+                :style="{ width: progress + '%' }"
+              ></div>
+            </div>
+
+            <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+              <span class="animate-pulse flex items-center gap-1.5">
+                <i class="fa-solid fa-circle text-[6px] text-accent-400"></i> Gravando blocos no SQLite...
+              </span>
+              <span>1000 Mbps</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Seção Principal: Lista de Arquivos -->
+      <main class="rounded-2xl bg-surface-card border border-surface-border backdrop-blur-xl shadow-2xl overflow-hidden">
+        
+        <!-- Toolbar Superior da Tabela -->
+        <div class="p-4 sm:px-6 border-b border-surface-border flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white/[0.01]">
+          <div class="flex items-center gap-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">
+              Arquivos Disponíveis
+            </h3>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-surface-subtle text-slate-300 border border-surface-border">
+              {{ filteredFiles.length }}
+            </span>
+          </div>
+
+          <!-- Busca Instantânea com Tecla de Atalho -->
+          <div class="relative flex-1 max-w-xs">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="Filtrar arquivos... (pressione /)" 
+              ref="searchInput"
+              class="w-full h-8 pl-8 pr-8 rounded-lg bg-surface-subtle border border-surface-border focus:border-accent-500/50 focus:ring-1 focus:ring-accent-500/30 text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
+            />
+            <span v-if="!searchQuery" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-500 border border-surface-border px-1.5 py-0.2 rounded bg-white/[0.02]">
+              /
+            </span>
+            <button 
+              v-else 
+              @click="searchQuery = ''" 
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Estado Vazio (Nenhum Arquivo ou Busca Sem Resultados) -->
+        <div v-if="filteredFiles.length === 0" class="py-16 px-4 text-center">
+          <div class="w-12 h-12 rounded-2xl bg-surface-subtle border border-surface-border flex items-center justify-center text-slate-500 mx-auto mb-3">
+            <i class="fa-regular fa-folder-open text-xl"></i>
+          </div>
+          <p class="text-sm font-medium text-slate-300">
+            {{ searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum arquivo compartilhado' }}
+          </p>
+          <p class="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+            {{ searchQuery ? 'Verifique a digitação ou limpe o filtro de busca.' : 'Arraste um documento para a caixa acima para disponibilizar na rede local.' }}
+          </p>
+        </div>
+
+        <!-- Lista de Ficheiros -->
+        <ul v-else class="divide-y divide-surface-border">
+          <li 
+            v-for="file in filteredFiles" 
+            :key="file.id" 
+            class="px-4 sm:px-6 py-3.5 hover:bg-white/[0.02] flex items-center justify-between gap-4 transition-colors group"
+          >
+            <!-- Detalhes do Arquivo -->
+            <div class="flex items-center gap-3.5 min-w-0">
+              <div class="w-10 h-10 rounded-xl bg-surface-subtle border border-surface-border flex items-center justify-center shrink-0 group-hover:border-accent-500/30 transition-colors">
+                <i :class="[getFileIcon(file.name), getFileColor(file.name)]" class="text-base"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs sm:text-sm font-medium text-slate-200 truncate group-hover:text-white transition-colors" :title="file.name">
+                  {{ file.name }}
+                </p>
+                <div class="flex items-center gap-2 text-[11px] text-slate-500 font-mono mt-0.5">
+                  <span class="text-slate-400">{{ formatSize(file.size) }}</span>
+                  <span>•</span>
+                  <span class="text-slate-600 truncate max-w-[80px]" :title="file.id">#{{ file.id.substring(0, 8) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação Rápida -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <!-- Copiar Link -->
+              <button 
+                @click="copyDownloadLink(file.id)" 
+                class="h-8 w-8 rounded-lg bg-surface-subtle hover:bg-white/10 border border-surface-border text-slate-400 hover:text-white flex items-center justify-center transition-all text-xs active:scale-95" 
+                title="Copiar link de download direto"
+              >
+                <i class="fa-regular fa-copy"></i>
+              </button>
+
+              <!-- Baixar -->
+              <a 
+                :href="'/api/download/' + file.id" 
+                class="h-8 px-3 rounded-lg bg-accent-500 hover:bg-accent-600 text-white font-medium text-xs flex items-center gap-1.5 transition-all shadow-sm shadow-accent-500/20 active:scale-95"
+              >
+                <i class="fa-solid fa-download text-[11px]"></i>
+                <span class="hidden sm:inline">Baixar</span>
+              </a>
+
+              <!-- Deletar -->
+              <button 
+                @click="deleteFile(file.id)" 
+                class="h-8 w-8 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 text-slate-500 hover:text-rose-400 flex items-center justify-center transition-all text-xs active:scale-95" 
+                title="Excluir arquivo permanentemente"
+              >
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </li>
+        </ul>
+      </main>
+
+      <!-- Footer Minimalista -->
+      <footer class="pt-2 pb-6 text-center text-xs font-mono text-slate-600 flex justify-between items-center border-t border-surface-border">
+        <span>DashDrop Engine • Clean Go + SQLite</span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
+          Porta 8080 Ativa
+        </span>
+      </footer>
+
+      <!-- Toast Flutuante Ultra-Clean -->
+      <transition 
+        enter-active-class="transform ease-out duration-200 transition" 
+        enter-from-class="translate-y-4 opacity-0 scale-95" 
+        enter-to-class="translate-y-0 opacity-100 scale-100" 
+        leave-active-class="transition ease-in duration-150" 
+        leave-from-class="opacity-100 scale-100" 
+        leave-to-class="translate-y-2 opacity-0 scale-95"
+      >
+        <div 
+          v-if="toast.show" 
+          class="fixed bottom-6 right-6 flex items-center gap-2.5 bg-slate-900 border border-surface-border px-4 py-3 rounded-xl shadow-2xl z-50 text-xs font-medium text-slate-200"
+        >
+          <i :class="toast.icon" :class="toast.type === 'success' ? 'text-emerald-400' : 'text-rose-400'"></i>
+          <span>{{ toast.message }}</span>
+        </div>
+      </transition>
+
+    </div>
+
+    <!-- Script Vue 3 -->
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            files: [],
+            searchQuery: "",
+            loading: false,
+            dragover: false,
+            uploading: false,
+            progress: 0,
+            currentFile: "",
+            toast: { show: false, message: "", type: "success", icon: "" }
+          };
+        },
+        computed: {
+          totalStorage() {
+            return this.files.reduce((acc, f) => acc + (f.size || 0), 0);
+          },
+          filteredFiles() {
+            if (!this.searchQuery) return this.files;
+            const q = this.searchQuery.toLowerCase();
+            return this.files.filter(f => f.name.toLowerCase().includes(q));
+          }
+        },
+        mounted() {
+          this.fetchFiles();
+          
+          // Atalho "/" para focar rapidamente na busca (estilo GitHub/Linear)
+          window.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement !== this.$refs.searchInput) {
+              e.preventDefault();
+              this.$refs.searchInput?.focus();
+            }
+          });
+        },
+        methods: {
+          showToast(message, type = 'success') {
+            this.toast = {
+              show: true,
+              message,
+              type,
+              icon: type === 'success' ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation'
+            };
+            setTimeout(() => { this.toast.show = false; }, 3200);
+          },
+          async fetchFiles() {
+            this.loading = true;
+            try {
+              const res = await fetch("/api/files");
+              if (res.ok) {
+                this.files = await res.json();
+              }
+            } catch (e) {
+              this.showToast("Falha ao comunicar com o nó local", "error");
+            } finally {
+              this.loading = false;
+            }
+          },
+          formatSize(bytes) {
+            if (!bytes || bytes === 0) return "0 B";
+            const k = 1024;
+            const sizes = ["B", "KB", "MB", "GB", "TB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+          },
+          getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif'].includes(ext)) return 'fa-regular fa-image';
+            if (['zip', 'tar', 'gz', '7z', 'rar', 'xz'].includes(ext)) return 'fa-regular fa-file-zipper';
+            if (['pdf'].includes(ext)) return 'fa-regular fa-file-pdf';
+            if (['mp4', 'mkv', 'mov', 'webm'].includes(ext)) return 'fa-regular fa-file-video';
+            if (['mp3', 'wav', 'flac'].includes(ext)) return 'fa-regular fa-file-audio';
+            if (['go', 'js', 'ts', 'py', 'rs', 'sh', 'sql', 'json'].includes(ext)) return 'fa-solid fa-code';
+            return 'fa-regular fa-file-lines';
+          },
+          getFileColor(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(ext)) return 'text-sky-400';
+            if (['pdf'].includes(ext)) return 'text-rose-400';
+            if (['zip', 'tar', 'gz'].includes(ext)) return 'text-amber-400';
+            if (['go', 'js', 'py', 'sh', 'rs'].includes(ext)) return 'text-emerald-400';
+            return 'text-slate-400';
+          },
+          copyDownloadLink(id) {
+            const url = `${window.location.origin}/api/download/${id}`;
+            navigator.clipboard.writeText(url).then(() => {
+              this.showToast("Link direto copiado para a área de transferência!");
+            }).catch(() => {
+              this.showToast("Não foi possível copiar o link", "error");
+            });
+          },
+          handleDrop(e) {
+            this.dragover = false;
+            if (e.dataTransfer.files.length > 0) {
+              this.uploadFile(e.dataTransfer.files[0]);
+            }
+          },
+          handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+              this.uploadFile(e.target.files[0]);
+            }
+          },
+          uploadFile(file) {
+            this.uploading = true;
+            this.currentFile = file.name;
+            this.progress = 0;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/upload", true);
+
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                this.progress = Math.round((e.loaded / e.total) * 100);
+              }
+            };
+
+            xhr.onload = () => {
+              this.uploading = false;
+              if (xhr.status === 201) {
+                this.showToast(`"${file.name}" compartilhado com sucesso!`);
+                this.fetchFiles();
+              } else {
+                this.showToast("Erro ao processar arquivo no servidor", "error");
+              }
+            };
+
+            xhr.onerror = () => {
+              this.uploading = false;
+              this.showToast("Falha na conexão durante a transferência", "error");
+            };
+
+            xhr.send(formData);
+          },
+          async deleteFile(id) {
+            if (!confirm("Remover este arquivo permanentemente do disco?")) return;
+            try {
+              const res = await fetch(`/api/files/${id}`, { method: 'DELETE' });
+              if (res.status === 204) {
+                this.showToast("Arquivo removido do nó");
+                this.fetchFiles();
+              } else {
+                this.showToast("Erro ao excluir arquivo", "error");
+              }
+            } catch (e) {
+              this.showToast("Falha de rede ao tentar deletar", "error");
+            }
+          }
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>

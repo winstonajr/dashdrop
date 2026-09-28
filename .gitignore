@@ -1,0 +1,43 @@
+# Binários compilados
+bin/
+tmp/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Diretório e dados de uploads (mantém a pasta rastreada sem versionar arquivos dos usuários)
+uploads/*
+!uploads/.gitkeep
+
+# Arquivos de banco de dados SQLite locais
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Arquivos temporários e logs do Air / Live Reload
+.air.toml.bak
+build-errors.log
+
+# Variáveis de ambiente e segredos locais
+.env
+.env.local
+*.env
+
+# IDEs e Editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs gerais
+*.log
